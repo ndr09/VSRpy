@@ -2,7 +2,7 @@ import os
 # queste due righe sono da commentare su linux (mi pare, not sure)
 os.add_dll_directory(os.path.join(os.environ['JAVA_HOME'], 'bin', 'server'))
 os.environ[
-    'CLASSPATH'] = "C:\\Users\\Mariella\\Desktop\\mapElites\\hebbianCode\\VSREpy\\TwoDimHighlyModularSoftRobots.jar"
+    'CLASSPATH'] = "C:\\Users\\Mariella\\Desktop\\mapElites\\hebbianCode\\VSRpy\\TwoDimHighlyModularSoftRobots.jar"
 
 import jnius_config
 import argparse
@@ -11,6 +11,7 @@ from ribs.emitters import ImprovementEmitter
 from ribs.optimizers import Optimizer
 from multiprocessing import Pool
 from matplotlib import pyplot as plt
+from numpy.ma import masked_array
 
 jnius_config.add_options('-Xrs', '-Xmx4096m')
 
@@ -67,20 +68,29 @@ def locomotion(args, ind):
     tmp = outcome.getDataObservation()
     return tmp
 
-def drawImage(observed):
+def drawImage(observed, filename, dpi=400):
 
     print(len(observed))
     print(len(observed[0]))
     rf = len(observed)//len(observed[0])
     tmp = list()
-    if rf > 1:
-        for i in range()
-        for i in range(rf):
-            tmp.append()
+
+    for i in range(len(observed)):
+        tmp1 = list()
+        for j in range(len(observed[i])):
+            for k in range(rf):
+                tmp1.append(observed[i][j])
+        tmp.append(tmp1)
+
+    observed = tmp
+    print(len(observed))
+    print(len(observed[0]))
+    print(observed[0])
     npdata = np.array(observed)
     npdata = npdata.transpose()
-    plt.imshow(npdata)
-    plt.savefig("data/test.png")
+    plt.imshow(npdata, origin='lower')
+    plt.yticks([i for i in range(0, len(observed[0]), 4*rf)], [str(i//(4*rf)) for i in range(0, len(observed[0]),4*rf)])
+    plt.savefig(filename, dpi=dpi)
 
 if __name__ == '__main__':
     args = input_parser()
@@ -98,4 +108,4 @@ if __name__ == '__main__':
         for robot in f:
             observed = locomotion([String(terrain), String(shape), String(sensors), String(controller), duration],
                                   robot)
-            drawImage(observed)
+            drawImage(observed[:190], "data/data2.pdf", 600)
