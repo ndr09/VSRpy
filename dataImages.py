@@ -89,7 +89,7 @@ def drawImage(observed, filename, dpi=400):
     npdata = np.array(observed)
     npdata = npdata.transpose()
     plt.imshow(npdata, origin='lower')
-    plt.yticks([i for i in range(0, len(observed[0]), 4*rf)], [str(i//(4*rf)) for i in range(0, len(observed[0]),4*rf)])
+    plt.yticks([i for i in range(0, len(observed[0]), rf)], [str(i//(rf)) for i in range(0, len(observed[0]),rf)])
     plt.savefig(filename, dpi=dpi)
 
 if __name__ == '__main__':
@@ -108,4 +108,4 @@ if __name__ == '__main__':
         for robot in f:
             observed = locomotion([String(terrain), String(shape), String(sensors), String(controller), duration],
                                   robot)
-            drawImage(observed[:190], "data/data2.pdf", 600)
+            drawImage(observed[:500], "data/data_0.pdf", 600)
