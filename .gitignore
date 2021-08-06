@@ -1,4 +1,7 @@
 data/
+nets/
+results/
+*.png
 .idea/
 
 # Byte-compiled / optimized / DLL files

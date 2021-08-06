@@ -2,6 +2,29 @@ import numpy as np
 from matplotlib import pyplot as plt
 import csv
 import os
+from pprint import pprint as pp
+
+os.add_dll_directory(os.path.join(os.environ['JAVA_HOME'], 'bin', 'server'))
+os.environ[
+    'CLASSPATH'] = "C:\\Users\\Mariella\\Desktop\\mapElites\\hebbianCode\\VSRpy\\TwoDimHighlyModularSoftRobots.jar"
+
+import jnius_config
+
+jnius_config.add_options('-Xrs', '-Xmx4096m')
+
+from jnius import autoclass
+import jnius
+
+String = autoclass("java.lang.String")
+terrain = "hilly-3-30-0"
+shape = "biped-4x3"
+sensors = "high_biped-0.01-f"
+controller = "MLP-0.1-0-tanh"
+duration = 60
+Pyworker = autoclass('it.units.erallab.hmsrobots.Pyworker')
+
+pyworker = Pyworker(String(terrain), String(shape), String(sensors),
+                    String(controller), duration)
 
 
 def loadData(filename):
@@ -128,20 +151,14 @@ def boxPlot(fig, d, conf, y, sensor):
     fig[y].set_ylabel(sensor)
 
 
-def netPlot(fig, d, conf, y, sensor, mi, ma):
-    lab = ["MLP", "F - 0.1 - Z", "F - 0.1 - Z", "F - 0.01 - Z", "F - 0.01 - R",
-           "I - 0.1 - Z", "I - 0.1 - R", "I - 0.01 - Z", "I - 0.01 - R" ]
-    for x in range(len(d)):
-        print(len(d[x]))
-        fig[y, x].imshow(d[x], vmin=mi, vmax=ma)
-
-    if y == 2:
-        for x in range(len(lab)):
-            fig[y, x].set_xlabel(lab[x])
-            for tick in fig[y,x].xaxis.get_major_ticks():
-                tick.label.set_fontsize('xx-small')
-    fig[y, 0].set_ylabel(sensor)
-
+def netPlot(d, conf):
+    fig, ax = plt.subplots()
+    pos = ax.imshow(d)
+    fig.colorbar(pos,ax=ax)
+    fig.suptitle(conf)
+    plt.savefig("nets/"+conf+".png", dpi=800)
+    plt.clf()
+    plt.close(fig)
 
 def getSensors(serialized):
     observed = np.array(pyworker.locomoteSerialized(String(serialized)).getDataObservation())
@@ -193,8 +210,8 @@ def findMin(data):
 def findMax(data):
     maxs =list()
     for k in data.keys():
-        maxs.append([np.min(data[k][i]) for i in range(10)])
-    return np.min(maxs)
+        maxs.append([np.max(data[k][i]) for i in range(10)])
+    return np.max(maxs)
 
 def plotDataModel(fig, allData, conf, x, y, init, legend=False):
     # full
@@ -267,10 +284,178 @@ def plotDataInit(fig, allData, conf, x, y, legend=False):
                        color='blue', linestyle='dotted')
 
 
-best= list()
-for i in range(10):
-    best.append(np.loadtxt("./results" + "/" + "worm" + "/" + "medium" + "/mlp/b." + str(i) + ".gz"))
+if __name__ == '__main__':
+    shapes = ['biped']
+    sensors = ['low', 'medium', 'high']
+    models = ['full', 'incoming']
+    inits = ['zero', 'random']
+    etas = ['01', '001']
+    baseDir = 'results'
+    allData = dict()
+    allVal = dict()
+    bests = dict()
+    for shape in shapes:
+        for sensor in sensors:
+            if valCheck(baseDir + "/" + shape + "/" + sensor + "/mlp/val.0.txt"):
+                val = dict()
+                val["flat"] = list()
+                val["hilly"] = list()
+                val["steppy"] = list()
+                for i in range(10):
+                    tmp = loadVal(baseDir + "/" + shape + "/" + sensor + "/mlp/val." + str(i) + ".txt")
+                    # print(tmp["flat"])
+                    val["flat"].append(tmp["flat"])
+                    val["hilly"].append(tmp["hilly"])
+                    val["steppy"].append(tmp["steppy"])
+                allVal[shape + "_" + sensor + "_mlp"] = val
+            else:
+                print(shape + "_" + sensor)
+                val = dict()
+                val["flat"] = list()
+                val["hilly"] = list()
+                val["steppy"] = list()
+                for i in range(10):
+                    res = validate(baseDir + "/" + shape + "/" + sensor + "/mlp/", str(i) + ".txt")
+                    val["flat"].append(res["flat"])
+                    val["hilly"].append(res["hilly"])
+                    val["steppy"].append(res["steppy"])
+                    allVal[shape + "_" + sensor + "_mlp"] = val
 
-best =np.array(best)
-plt.imshow(sum(best) / len(best))
-plt.savefig("test1.png", dpi=800)
+            data = list()
+            best = list()
+            for i in range(10):
+
+                data.append(loadData(
+                    baseDir + "/" + shape + "/" + sensor + "/mlp/" + str(i) + ".txt"))
+
+            data = processData(data)
+            allData[shape + "_" + sensor] = data
+
+            if os.path.isfile(baseDir + "/" + shape + "/" + sensor + "/mlp/b." + str(i) + ".gz"):
+                for i in range(10):
+                    print("pre load " + baseDir + "/" + shape + "/" + sensor + "/mlp/" + str(i) + ".txt")
+                    best.append(np.loadtxt(baseDir + "/" + shape + "/" + sensor + "/mlp/b." + str(i) + ".gz"))
+                    print("post load " + baseDir + "/" + shape + "/" + sensor + "/mlp/" + str(i) + ".txt")
+                bests[shape + "_" + sensor] = best
+            else:
+                for i in range(10):
+                    best.append(String(
+                        getBest(baseDir + "/" + shape + "/" + sensor + "/mlp/" + str(
+                            i) + ".txt")))
+
+                bests[shape + "_" + sensor] = processNetData(pyworker.locomoteSerializedParallel(best))
+                for i in range(10):
+                    np.savetxt(
+                        baseDir + "/" + shape + "/" + sensor + "/mlp/b." + str(
+                            i) + ".gz", bests[shape + "_" + sensor][i])
+
+            for model in models:
+                for eta in etas:
+                    for init in inits:
+                        if valCheck(
+                                baseDir + "/" + shape + "/" + sensor + "/" + model + "/" + eta + "/" + init + "/val.0.txt"):
+                            val = dict()
+                            val["flat"] = list()
+                            val["hilly"] = list()
+                            val["steppy"] = list()
+                            for i in range(10):
+
+                                tmp = loadVal(
+                                    baseDir + "/" + shape + "/" + sensor + "/" + model + "/" + eta + "/" + init + "/val." + str(
+                                        i) + ".txt")
+                                val["flat"].append(tmp["flat"])
+                                val["hilly"].append(tmp["hilly"])
+                                val["steppy"].append(tmp["steppy"])
+                            allVal[shape + "_" + sensor + "_" + model + "_" + eta + "_" + init] = val
+                        else:
+                            print(shape + "_" + sensor + "_" + model + "_" + eta + "_" + init)
+                            val = dict()
+                            val["flat"] = list()
+                            val["hilly"] = list()
+                            val["steppy"] = list()
+                            for i in range(10):
+                                res = validate(
+                                    baseDir + "/" + shape + "/" + sensor + "/" + model + "/" + eta + "/" + init + "/",
+                                    str(
+                                        i) + ".txt")
+                                val["flat"].append(res["flat"])
+                                val["hilly"].append(res["hilly"])
+                                val["steppy"].append(res["steppy"])
+                                allVal[shape + "_" + sensor + "_" + model + "_" + eta + "_" + init] = val
+
+                        data = list()
+                        best = list()
+                        for i in range(10):
+                            data.append(loadData(
+                                baseDir + "/" + shape + "/" + sensor + "/" + model + "/" + eta + "/" + init + "/" + str(
+                                    i) + ".txt"))
+                        print(baseDir + "/" + shape + "/" + sensor + "/" + model + "/" + eta + "/" + init)
+                        newData = processData(data)
+                        allData[shape + "_" + sensor + "_" + model + "_" + eta + "_" + init] = newData
+
+                        if os.path.isfile(baseDir + "/" + shape + "/" + sensor + "/" + model + "/" + eta + "/" + init + "/b." + str(
+                                        i) + ".gz"):
+                            for i in range(10):
+                                print("pre load " + baseDir + "/" + shape + "/" + sensor + "/" + model + "/" + eta + "/" + init + "/b." + str(
+                                        i) + ".gz")
+                                best.append(
+                                    np.loadtxt(baseDir + "/" + shape + "/" + sensor + "/" + model + "/" + eta + "/" + init + "/b." + str(
+                                        i) + ".gz"))
+                                print(
+                                    "post load " + baseDir + "/" + shape + "/" + sensor + "/" + model + "/" + eta + "/" + init + "/b." + str(
+                                        i) + ".gz")
+                            bests[shape + "_" + sensor + "_" + model + "_" + eta + "_" + init] = best
+                        else:
+                            for i in range(10):
+                                best.append(String(getBest(
+                                    baseDir + "/" + shape + "/" + sensor + "/" + model + "/" + eta + "/" + init + "/" + str(
+                                        i) + ".txt")))
+                            bests[shape + "_" + sensor + "_" + model + "_" + eta + "_" + init] = processNetData(pyworker.locomoteSerializedParallel(best))
+                            print(bests[shape + "_" + sensor + "_" + model + "_" + eta + "_" + init][i].shape)
+                            for i in range(10):
+                                np.savetxt(
+                                    baseDir + "/" + shape + "/" + sensor + "/" + model + "/" + eta + "/" + init + "/b." + str(
+                                        i) + ".gz", bests[shape + "_" + sensor + "_" + model + "_" + eta + "_" + init][i])
+
+                        # plotData(shape+"_"+sensor+"_"+model+"_"+eta+"_"+init)
+
+    fig, axs = plt.subplots(2, 3, sharey=True)
+    for y in range(len(shapes)):
+        for x in range(len(sensors)):
+            if x == 1 and y == 1:
+                # plotDataModel(axs, allData, shapes[y] + "_" + sensors[x], x, y, "random", True)
+                plotDataInit(axs, allData, shapes[y] + "_" + sensors[x] + "_incoming", x, y, True)
+            else:
+                # plotDataModel(axs, allData, shapes[y] + "_" + sensors[x], x, y, "random", False)
+                plotDataInit(axs, allData, shapes[y] + "_" + sensors[x] + "_incoming", x, y, False)
+
+    axs[0, 0].set_ylabel('Worm')
+    axs[1, 0].set_ylabel('Biped')
+    axs[1, 0].set_xlabel('Low')
+    axs[1, 1].set_xlabel('Medium')
+    axs[1, 2].set_xlabel('High')
+    fig.legend(loc='upper center', ncol=2, fontsize="x-small")
+    # plt.savefig("init_comparison_incoming.png", dpi=800)
+
+    plt.clf()
+    fig, axs = plt.subplots(3, 1, sharey=True)
+    axs[0].set_title("Worm")
+    for y in range(len(sensors)):
+        boxPlot(axs, allVal, "worm" + "_" + sensors[y], y, sensors[y][0].upper() + sensors[y][1:])
+    # plt.savefig("Worm_adaptation.png", dpi=800)
+
+
+    #mi = findMin(bests)
+    #ma = findMax(bests)
+    #print(mi)
+    #print(ma)
+
+    for shape in shapes:
+        for sensor in sensors:
+            conf = shape + "_" + sensor
+            netPlot(sum(bests[conf]) / len(bests[conf]), conf)
+            for model in models:
+                for eta in etas:
+                    for init in inits:
+                        conf = shape + "_" + sensor + "_" + model + "_" + eta + "_" + init
+                        netPlot(sum(bests[conf]) / len(bests[conf]), conf)

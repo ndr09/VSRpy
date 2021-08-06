@@ -68,7 +68,7 @@ def locomotion(args, ind):
     tmp = outcome.getDataObservation()
     return tmp
 
-def drawImage(observed, filename, dpi=400):
+def drawImage( axs, observed, filename, dpi=400):
 
     print(len(observed))
     print(len(observed[0]))
@@ -88,9 +88,9 @@ def drawImage(observed, filename, dpi=400):
     print(observed[0])
     npdata = np.array(observed)
     npdata = npdata.transpose()
-    plt.imshow(npdata, origin='lower')
-    plt.yticks([i for i in range(0, len(observed[0]), rf)], [str(i//(rf)) for i in range(0, len(observed[0]),rf)])
-    plt.savefig(filename, dpi=dpi)
+    axs.imshow(npdata, origin='lower')
+    axs.yticks([i for i in range(0, len(observed[0]), rf)], [str(i//(rf)) for i in range(0, len(observed[0]),rf)])
+
 
 if __name__ == '__main__':
     args = input_parser()
@@ -108,4 +108,5 @@ if __name__ == '__main__':
         for robot in f:
             observed = locomotion([String(terrain), String(shape), String(sensors), String(controller), duration],
                                   robot)
-            drawImage(observed[:500], "data/data_0.pdf", 600)
+            drawImage(plt, observed[:500], "data/data_0.pdf", 600)
+            plt.savefig(filename, 600)
