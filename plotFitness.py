@@ -37,6 +37,8 @@ def loadData(filename):
     return data
 
 
+def loadValBreakable(filename, breakable):
+
 def loadVal(filename):
     data = dict()
     data["flat"] = list()
@@ -66,6 +68,21 @@ def getBest(filename):
             ser = l["best→solution→serialized"]
     return ser
 
+def validateBreakable(dir, filename, breakable):
+    vals = pyworker.validatationSerializedBreakable(String(getBest(dir + filename)), String(breakable))
+    res = dict()
+    res["flat"] = vals[0]
+    res["hilly"] = np.mean(vals[1:6])
+    res["steppy"] = np.mean(vals[6:])
+    with open(dir + "val." + filename, "w", encoding='utf-8') as f:
+        f.write("keys→validation.terrain;outcome→velocity\n")
+        f.write("flat;" + str(vals[0]) + "\n")
+        for i in range(1, 6):
+            f.write("hilly;" + str(vals[i]) + "\n")
+        for i in range(6, 11):
+            f.write("steppy;" + str(vals[i]) + "\n")
+
+    return res
 
 def validate(dir, filename):
     vals = pyworker.validatationSerialized(String(getBest(dir + filename)))
@@ -148,7 +165,7 @@ def boxPlot(fig, d, conf, y, sensor):
     if y == 2:
         for tick in fig[y].xaxis.get_major_ticks():
             tick.label.set_fontsize('xx-small')
-    fig[y].set_ylabel(sensor)
+    fig[y].set_ylabel(sensor+'\n $\overline{v}$', multialignment='center')
 
 
 def netPlot(d, conf):
@@ -156,6 +173,8 @@ def netPlot(d, conf):
     pos = ax.imshow(d)
     fig.colorbar(pos,ax=ax)
     fig.suptitle(conf)
+    ax.set_xlabel("Tick")
+    ax.set_ylabel("$\overline{v}$")
     plt.savefig("nets/"+conf+".png", dpi=800)
     plt.clf()
     plt.close(fig)
@@ -285,7 +304,7 @@ def plotDataInit(fig, allData, conf, x, y, legend=False):
 
 
 if __name__ == '__main__':
-    shapes = ['biped']
+    shapes = ['worm', 'biped']
     sensors = ['low', 'medium', 'high']
     models = ['full', 'incoming']
     inits = ['zero', 'random']
@@ -293,6 +312,7 @@ if __name__ == '__main__':
     baseDir = 'results'
     allData = dict()
     allVal = dict()
+    allValB = dict()
     bests = dict()
     for shape in shapes:
         for sensor in sensors:
@@ -419,30 +439,53 @@ if __name__ == '__main__':
 
                         # plotData(shape+"_"+sensor+"_"+model+"_"+eta+"_"+init)
 
-    fig, axs = plt.subplots(2, 3, sharey=True)
-    for y in range(len(shapes)):
-        for x in range(len(sensors)):
-            if x == 1 and y == 1:
-                # plotDataModel(axs, allData, shapes[y] + "_" + sensors[x], x, y, "random", True)
-                plotDataInit(axs, allData, shapes[y] + "_" + sensors[x] + "_incoming", x, y, True)
-            else:
-                # plotDataModel(axs, allData, shapes[y] + "_" + sensors[x], x, y, "random", False)
-                plotDataInit(axs, allData, shapes[y] + "_" + sensors[x] + "_incoming", x, y, False)
 
-    axs[0, 0].set_ylabel('Worm')
-    axs[1, 0].set_ylabel('Biped')
-    axs[1, 0].set_xlabel('Low')
-    axs[1, 1].set_xlabel('Medium')
-    axs[1, 2].set_xlabel('High')
-    fig.legend(loc='upper center', ncol=2, fontsize="x-small")
-    # plt.savefig("init_comparison_incoming.png", dpi=800)
+    for model in ['zero', 'random']:
+        fig, axs = plt.subplots(2, 3, sharey=True)
+        for y in range(len(shapes)):
+            for x in range(len(sensors)):
+                if x == 1 and y == 1:
+                    plotDataModel(axs, allData, shapes[y] + "_" + sensors[x], x, y, model, True)
+                    #plotDataInit(axs, allData, shapes[y] + "_" + sensors[x] + "_incoming", x, y, True)
+                else:
+                    plotDataModel(axs, allData, shapes[y] + "_" + sensors[x], x, y, model, False)
+                    #plotDataInit(axs, allData, shapes[y] + "_" + sensors[x] + "_incoming", x, y, False)
+        fig.suptitle("Initilization "+model)
+        axs[0, 0].set_ylabel('Worm \n $\overline{v}$', multialignment='center')
+        axs[1, 0].set_ylabel('Biped\n $\overline{v}$', multialignment='center')
+        axs[1, 0].set_xlabel('Low')
+        axs[1, 1].set_xlabel('Medium')
+        axs[1, 2].set_xlabel('High')
+        fig.legend(loc='upper right', ncol=2, fontsize="x-small")
+        plt.savefig("model_comparison_"+model+".png", dpi=800)
+        plt.clf()
 
-    plt.clf()
-    fig, axs = plt.subplots(3, 1, sharey=True)
-    axs[0].set_title("Worm")
-    for y in range(len(sensors)):
-        boxPlot(axs, allVal, "worm" + "_" + sensors[y], y, sensors[y][0].upper() + sensors[y][1:])
-    # plt.savefig("Worm_adaptation.png", dpi=800)
+    for model in ['incoming', 'full']:
+        fig, axs = plt.subplots(2, 3, sharey=True)
+        for y in range(len(shapes)):
+            for x in range(len(sensors)):
+                if x == 1 and y == 1:
+                    #plotDataModel(axs, allData, shapes[y] + "_" + sensors[x], x, y, model, True)
+                    plotDataInit(axs, allData, shapes[y] + "_" + sensors[x] + "_incoming", x, y, True)
+                else:
+                    #plotDataModel(axs, allData, shapes[y] + "_" + sensors[x], x, y, model, False)
+                    plotDataInit(axs, allData, shapes[y] + "_" + sensors[x] + "_incoming", x, y, False)
+        fig.suptitle("model "+model)
+        axs[0, 0].set_ylabel('Worm\n $\overline{v}$', multialignment='center')
+        axs[1, 0].set_ylabel('Biped\n $\overline{v}$', multialignment='center')
+        axs[1, 0].set_xlabel('Low')
+        axs[1, 1].set_xlabel('Medium')
+        axs[1, 2].set_xlabel('High')
+        fig.legend(loc='upper right', ncol=2, fontsize="x-small")
+        plt.savefig("init_comparison_"+model+".png", dpi=800)
+        plt.clf()
+
+    for shape in shapes:
+        fig, axs = plt.subplots(3, 1, sharey=True)
+        axs[0].set_title(shape)
+        for y in range(len(sensors)):
+            boxPlot(axs, allVal, shape + "_" + sensors[y], y, sensors[y][0].upper() + sensors[y][1:])
+        plt.savefig(shape+"_adaptation.png", dpi=800)
 
 
     #mi = findMin(bests)
@@ -459,3 +502,5 @@ if __name__ == '__main__':
                     for init in inits:
                         conf = shape + "_" + sensor + "_" + model + "_" + eta + "_" + init
                         netPlot(sum(bests[conf]) / len(bests[conf]), conf)
+
+
