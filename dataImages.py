@@ -59,6 +59,7 @@ def multiprocess_function(candidates, args):
     return fitness
 
 
+
 def locomotion(args, ind):
     String = autoclass("java.lang.String")
     Pyworker = autoclass('it.units.erallab.hmsrobots.Pyworker')
@@ -83,13 +84,14 @@ def drawImage( axs, observed, filename, dpi=400):
         tmp.append(tmp1)
 
     observed = tmp
-    print(len(observed))
-    print(len(observed[0]))
-    print(observed[0])
     npdata = np.array(observed)
     npdata = npdata.transpose()
+    plt.figure(figsize=(8, 8))
+    plt.tight_layout()
+
     axs.imshow(npdata, origin='lower')
-    axs.yticks([i for i in range(0, len(observed[0]), rf)], [str(i//(rf)) for i in range(0, len(observed[0]),rf)])
+    axs.yticks([])
+
 
 
 if __name__ == '__main__':
@@ -103,10 +105,11 @@ if __name__ == '__main__':
 
     String = autoclass("java.lang.String")
     Pyworker = autoclass('it.units.erallab.hmsrobots.Pyworker')
-
-    with open("data/data.txt") as f:
-        for robot in f:
-            observed = locomotion([String(terrain), String(shape), String(sensors), String(controller), duration],
-                                  robot)
-            drawImage(plt, observed[:500], "data/data_0.pdf", 600)
-            plt.savefig(filename, 600)
+    for r in ["0","526",'1052','1578','2104','3156','4208','4734']:
+        with open("ribs/video_"+r) as f:
+            for robot in f:
+                observed = locomotion([String(terrain), String(shape), String(sensors), String(controller), duration],
+                                      robot)
+                data = drawImage(plt, observed, "ribs/data_"+r+".pdf")
+                #ave_image(data,"ribs/data_"+r+".png")
+                plt.savefig("ribs/data_"+r+".png", dpi=100)

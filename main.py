@@ -1,6 +1,4 @@
 import os
-
-
 os.add_dll_directory(os.path.join(os.environ['JAVA_HOME'], 'bin', 'server'))
 os.environ[
     'CLASSPATH'] = "C:\\Users\\Mariella\\Desktop\\mapElites\\hebbianCode\\VSREpy\\TwoDimHighlyModularSoftRobots.jar"
@@ -16,6 +14,7 @@ jnius_config.add_options('-Xrs', '-Xmx4096m')
 
 from jnius import autoclass
 import jnius
+
 
 
 def input_parser():

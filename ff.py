@@ -18,7 +18,7 @@ String = autoclass("java.lang.String")
 terrain = "hilly-3-30-0"
 shape = "biped-4x3"
 sensors = "high_biped-0.01-f"
-controller = "MLP-0.1-0-tanh"
+controller = "HLP-full-0.01-tanh-1-1--1-1-1"
 duration = 60
 Pyworker = autoclass('it.units.erallab.hmsrobots.Pyworker')
 
@@ -29,7 +29,7 @@ pyworker = Pyworker(String(terrain), String(shape), String(sensors),
 def loadData(filename):
     data = list()
     # print(filename)
-    with open("./" + filename, encoding='utf-8') as f:
+    with open(filename, encoding='utf-8') as f:
         fr = csv.DictReader(f, delimiter=";")
         for l in fr:
             data.append(float(l["best→fitness→as[Outcome]→velocity"]))
@@ -59,7 +59,7 @@ def loadVal(filename):
 
 def getBest(filename):
     ser = ''
-    with open( filename, encoding='utf-8') as f:
+    with open(filename, encoding='utf-8') as f:
         fr = csv.DictReader(f, delimiter=";")
         for l in fr:
             ser = l["best→solution→serialized"]
@@ -167,7 +167,7 @@ def netPlot(fig, d, conf, y, sensor, mi, ma):
 
 def getSensors(serialized):
     observed = np.array(pyworker.locomoteSerialized(String(serialized)).getDataObservation())
-    rf = len(observed) // len(observed[0])
+    '''rf = len(observed) // len(observed[0])
     tmp = list()
 
     for i in range(len(observed)):
@@ -179,8 +179,8 @@ def getSensors(serialized):
 
     observed = tmp
     npdata = np.array(observed)
-    npdata = npdata.transpose()
-    return npdata
+    npdata = npdata.transpose()'''
+    return observed
 
 
 def processNetData(data):
@@ -292,30 +292,71 @@ def plotDataInit(fig, allData, conf, x, y, legend=False):
                        color='blue', linestyle='dotted')
 
 
-best = getBest("D:/dati hebbian/rnorm/biped/high/full/001/zero/0.txt")
-w = np.array(pyworker.locomoteSerializedParallel([String(best)])[0])
-print(len(w))
-gsel = [w[i] for i in range(0, len(w), 60)]
-print(len(gsel))
+rng = np.random.default_rng(0)
+bestSer = getBest("D:\dati hebbian/biped/high/full/001/zero/0.txt")
+best = getSensors(bestSer)
 
-ser = list()
+print(len(best[-1]))
+
+gsel = [rng.normal(0, 10, 1131) for i in range(1000)]
+gsel1 = [rng.normal(0, 1, 1131) for i in range(1000)]
+gsel2 = [rng.uniform(-10, 10, 1131) for i in range(1000)]
+gsel3 = [rng.normal(-1, 1, 1131) for i in range(1000)]
+ser = [[],[],[],[]]
+
 c = 0
-c = np.zeros(w.shape)
-ma = list()
-mi = list()
-for i in range(len(w)-1):
-    c[i] = w[i+1]/w[i]
+print("========================================")
+# s = pyworker.getRobotSerialized(b)
+print("----------------------------------------")
+# pyworker.makeVideo(String(s), True, String(terrain),String("./test_last_"+str(c)+".mp4"),b)
+print("----------------------------------------")
+# pyworker.makeVideo(String(bestSer), True, String(terrain), String("./test_newversion2_norm" + str(c) + ".mp4"), list())
+print("----------------------------------------")
+for g in gsel:
+    s = pyworker.getRobotSerialized(g.tolist())
 
-    ma.append(np.max(c[i]))
-    mi.append(np.min(c[i]))
+    res = pyworker.validatationSerialized(String(s))
+    ser[0].append(res[0])
+    c += 1
 
+for g in gsel1:
+    s = pyworker.getRobotSerialized(g.tolist())
 
-print(np.max(ma))
-print(np.min(mi))
+    res = pyworker.validatationSerialized(String(s))
+    ser[1].append(res[0])
+    c += 1
 
-a = plt.imshow(c.transpose(), origin='lower', vmin=-2, vmax=2)
-plt.colorbar(a, orientation='vertical')
-plt.savefig("weightrap_norm.png", dpi=800)
+for g in gsel2:
+    s = pyworker.getRobotSerialized(g.tolist())
+
+    res = pyworker.validatationSerialized(String(s))
+    ser[2].append(res[0])
+    c += 1
+
+for g in gsel3:
+    s = pyworker.getRobotSerialized(g.tolist())
+
+    res = pyworker.validatationSerialized(String(s))
+    ser[3].append(res[0])
+    c += 1
+
+ser1 = list()
+
+#for t in range(0, 60, 1):
+    #res1 = pyworker.validatationSerializedTimed(String(bestSer), t)
+    #ser1.append(res1)
+    #pass
+
+fig, axs = plt.subplots(1, 1)
+axs.boxplot(ser, labels=['normal', 'normal-norm', 'uniform', 'uniform-norm'])
+#axs.set_xticks([])
+axs.set_ylabel("velocity")
+
+#axs[1].boxplot(ser1)
+#axs[1].set_xticklabels([])
+#axs[1].set_ylabel("velocity")
+plt.savefig("plots1_new3_normal_random_nonorm.png", dpi=800)
+
 # best =np.array(best)
 # plt.imshow(sum(best) / len(best))
 # plt.savefig("test1.png", dpi=800)

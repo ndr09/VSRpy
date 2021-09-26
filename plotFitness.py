@@ -6,7 +6,7 @@ from pprint import pprint as pp
 
 os.add_dll_directory(os.path.join(os.environ['JAVA_HOME'], 'bin', 'server'))
 os.environ[
-    'CLASSPATH'] = "C:\\Users\\Mariella\\Desktop\\mapElites\\hebbianCode\\VSRpy\\TwoDimHighlyModularSoftRobots.jar"
+    'CLASSPATH'] = "C:\\Users\\Mariella\\Desktop\\mapElites\\hebbianCode\\VSRpy\\test.jar"
 
 import jnius_config
 
@@ -19,7 +19,7 @@ String = autoclass("java.lang.String")
 terrain = "hilly-3-30-0"
 shape = "biped-4x3"
 sensors = "high_biped-0.01-f"
-controller = "MLP-0.1-0-tanh"
+controller = "MLP-1-1-tanh"
 duration = 60
 Pyworker = autoclass('it.units.erallab.hmsrobots.Pyworker')
 
@@ -30,14 +30,23 @@ pyworker = Pyworker(String(terrain), String(shape), String(sensors),
 def loadData(filename):
     data = list()
     # print(filename)
-    with open("./" + filename, encoding='utf-8') as f:
+    with open(filename, encoding='utf-8') as f:
         fr = csv.DictReader(f, delimiter=";")
         for l in fr:
             data.append(float(l["best→fitness→as[Outcome]→velocity"]))
     return data
 
 
-def loadValBreakable(filename, breakable):
+def loadBreakable(filename, breakable):
+    data = list()
+    # print(filename)
+    with open("./" + filename, encoding='utf-8') as f:
+        fr = csv.DictReader(f, delimiter=";")
+        for l in fr:
+            if l['transformation'].startswith(breakable):
+                data.append(float(l["outcome→velocity"]))
+    return data
+
 
 def loadVal(filename):
     data = dict()
@@ -45,7 +54,7 @@ def loadVal(filename):
     data["hilly"] = list()
     data["steppy"] = list()
     # print(filename)
-    with open("./" + filename, encoding='utf-8') as f:
+    with open(filename, encoding='utf-8') as f:
         fr = csv.DictReader(f, delimiter=";")
         for l in fr:
             if l["keys→validation.terrain"].startswith("flat"):
@@ -62,27 +71,20 @@ def loadVal(filename):
 
 def getBest(filename):
     ser = ''
-    with open("./" + filename, encoding='utf-8') as f:
+    v = 0
+    with open(filename, encoding='utf-8') as f:
         fr = csv.DictReader(f, delimiter=";")
         for l in fr:
             ser = l["best→solution→serialized"]
+            v = float(l["best→fitness→as[Outcome]→velocity"])
+    print(v)
     return ser
 
-def validateBreakable(dir, filename, breakable):
-    vals = pyworker.validatationSerializedBreakable(String(getBest(dir + filename)), String(breakable))
-    res = dict()
-    res["flat"] = vals[0]
-    res["hilly"] = np.mean(vals[1:6])
-    res["steppy"] = np.mean(vals[6:])
-    with open(dir + "val." + filename, "w", encoding='utf-8') as f:
-        f.write("keys→validation.terrain;outcome→velocity\n")
-        f.write("flat;" + str(vals[0]) + "\n")
-        for i in range(1, 6):
-            f.write("hilly;" + str(vals[i]) + "\n")
-        for i in range(6, 11):
-            f.write("steppy;" + str(vals[i]) + "\n")
 
-    return res
+def validateBreakable(bests, breakable):
+    vals = pyworker.validatationSerializedBreakable(bests, String(breakable))
+    return vals
+
 
 def validate(dir, filename):
     vals = pyworker.validatationSerialized(String(getBest(dir + filename)))
@@ -104,12 +106,12 @@ def validate(dir, filename):
 def processData(data):
     median = list()
     tmp = list()
-    for i in range(10):
+    for i in range(len(data)):
         tmp.append(len(data[i]))
     # print(tmp)
     for i in range(len(data[0])):
         tmp = list()
-        for j in range(10):
+        for j in range(len(data)):
             tmp.append(data[j][i])
         median.append(np.median(tmp))
     return median
@@ -117,6 +119,35 @@ def processData(data):
 
 def valCheck(filename):
     return os.path.isfile(filename)
+
+def boxPlotB(fig, y, shape, sensors, d, sensor):
+    data = [
+        d[shape+"_"+sensors[y]]["broken-0.1-0"],
+        d[shape + "_" + sensors[y]+"_full"]["broken-0.1-0"],
+        d[shape + "_" + sensors[y] + "_incoming"]["broken-0.1-0"],
+        d[shape + "_" + sensors[y]]["broken-0.3-0"],
+        d[shape + "_" + sensors[y] + "_full"]["broken-0.3-0"],
+        d[shape + "_" + sensors[y] + "_incoming"]["broken-0.3-0"],
+        d[shape + "_" + sensors[y]]["broken-0.5-0"],
+        d[shape + "_" + sensors[y] + "_full"]["broken-0.5-0"],
+        d[shape + "_" + sensors[y] + "_incoming"]["broken-0.5-0"]
+    ]
+    lab = []
+    if y == 2:
+        lab = ["DEW - 0.1", "F - 0.1", "I - 0.1", "DEW - 0.3", "F - 0.3", "I - 0.3","DEW - 0.5", "F - 0.5", "I - 0.5" ]
+    else:
+        lab = ["" for i in range(len(data))]
+    box = fig[y].boxplot(data, labels=lab, patch_artist=True)
+    colors = ['lightblue', 'lightgreen', 'tan', 'lightblue', 'lightgreen', 'tan', 'lightblue', 'lightgreen', 'tan']
+    for patch, color in zip(box['boxes'], colors):
+        patch.set_facecolor(color)
+    fig[y].legend([box["boxes"][0], box["boxes"][1], box["boxes"][2]], ['DEW', 'Full', "Incoming"],
+                  loc='upper right', fontsize="x-small")
+    if y == 2:
+        for tick in fig[y].xaxis.get_major_ticks():
+            tick.label.set_fontsize('xx-small')
+    fig[y].set_ylabel(sensor + '\n $\overline{v}$', multialignment='center')
+
 
 
 def boxPlot(fig, d, conf, y, sensor):
@@ -146,7 +177,7 @@ def boxPlot(fig, d, conf, y, sensor):
     ]
     lab = []
     if y == 2:
-        lab = ["", "MLP", "", "", "F - 0.1 - Z", "", "", "F - 0.1 - Z", "", "", "F - 0.01 - Z", "", "", "F - 0.01 - R",
+        lab = ["", "DEW", "", "", "F - 0.1 - Z", "", "", "F - 0.1 - R", "", "", "F - 0.01 - Z", "", "", "F - 0.01 - R",
                "",
                "", "I - 0.1 - Z", "", "", "I - 0.1 - R", "", "", "I - 0.01 - Z", "", "", "I - 0.01 - R", "", ]
     else:
@@ -165,19 +196,20 @@ def boxPlot(fig, d, conf, y, sensor):
     if y == 2:
         for tick in fig[y].xaxis.get_major_ticks():
             tick.label.set_fontsize('xx-small')
-    fig[y].set_ylabel(sensor+'\n $\overline{v}$', multialignment='center')
+    fig[y].set_ylabel(sensor + '\n $\overline{v}$', multialignment='center')
 
 
 def netPlot(d, conf):
     fig, ax = plt.subplots()
-    pos = ax.imshow(d)
-    fig.colorbar(pos,ax=ax)
+    pos = ax.imshow(d, origin='lower')
+    fig.colorbar(pos, ax=ax)
     fig.suptitle(conf)
     ax.set_xlabel("Tick")
     ax.set_ylabel("$\overline{v}$")
-    plt.savefig("nets/"+conf+".png", dpi=800)
+    plt.savefig("nets/norm/" + conf + ".png", dpi=1000)
     plt.clf()
     plt.close(fig)
+
 
 def getSensors(serialized):
     observed = np.array(pyworker.locomoteSerialized(String(serialized)).getDataObservation())
@@ -220,17 +252,20 @@ def processNetData(data):
 def writeBest(best, filename):
     best.savefile(filename)
 
+
 def findMin(data):
-    mins =list()
+    mins = list()
     for k in data.keys():
         mins.append([np.min(data[k][i]) for i in range(10)])
     return np.min(mins)
 
+
 def findMax(data):
-    maxs =list()
+    maxs = list()
     for k in data.keys():
         maxs.append([np.max(data[k][i]) for i in range(10)])
     return np.max(maxs)
+
 
 def plotDataModel(fig, allData, conf, x, y, init, legend=False):
     # full
@@ -243,7 +278,7 @@ def plotDataModel(fig, allData, conf, x, y, init, legend=False):
                        color='blue', linestyle='dashed', label="Full - 0.01")
         # standard
         fig[y, x].plot([i for i in range(len(allData[conf]))], allData[conf],
-                       color='black', label="MLP")
+                       color='black', label="DEW")
         # incoming
         fig[y, x].plot([i for i in range(len(allData[conf + "_incoming_01_" + init]))],
                        allData[conf + "_incoming_01_" + init],
@@ -278,7 +313,7 @@ def plotDataInit(fig, allData, conf, x, y, legend=False):
                        color='blue', linestyle='dashed', label="zero - 0.01")
         # standard
         fig[y, x].plot([i for i in range(len(allData[conf[:-9]]))], allData[conf[:-9]],
-                       color='black', label="MLP")
+                       color='black', label="DEW")
         # incoming
         fig[y, x].plot([i for i in range(len(allData[conf + "_01_random"]))],
                        allData[conf + "_01_random"],
@@ -305,14 +340,14 @@ def plotDataInit(fig, allData, conf, x, y, legend=False):
 
 if __name__ == '__main__':
     shapes = ['worm', 'biped']
-    sensors = ['low', 'medium', 'high']
-    models = ['full', 'incoming']
-    inits = ['zero', 'random']
-    etas = ['01', '001']
-    baseDir = 'results'
+    sensors = ['high']
+    models = ['full']
+    inits = ['zero']
+    etas = ['001']
+    baseDir = 'D:\dati hebbian/rnorm'
     allData = dict()
     allVal = dict()
-    allValB = dict()
+
     bests = dict()
     for shape in shapes:
         for sensor in sensors:
@@ -344,7 +379,6 @@ if __name__ == '__main__':
             data = list()
             best = list()
             for i in range(10):
-
                 data.append(loadData(
                     baseDir + "/" + shape + "/" + sensor + "/mlp/" + str(i) + ".txt"))
 
@@ -379,7 +413,6 @@ if __name__ == '__main__':
                             val["hilly"] = list()
                             val["steppy"] = list()
                             for i in range(10):
-
                                 tmp = loadVal(
                                     baseDir + "/" + shape + "/" + sensor + "/" + model + "/" + eta + "/" + init + "/val." + str(
                                         i) + ".txt")
@@ -413,14 +446,17 @@ if __name__ == '__main__':
                         newData = processData(data)
                         allData[shape + "_" + sensor + "_" + model + "_" + eta + "_" + init] = newData
 
-                        if os.path.isfile(baseDir + "/" + shape + "/" + sensor + "/" + model + "/" + eta + "/" + init + "/b." + str(
+                        if os.path.isfile(
+                                baseDir + "/" + shape + "/" + sensor + "/" + model + "/" + eta + "/" + init + "/b." + str(
                                         i) + ".gz"):
                             for i in range(10):
-                                print("pre load " + baseDir + "/" + shape + "/" + sensor + "/" + model + "/" + eta + "/" + init + "/b." + str(
+                                print(
+                                    "pre load " + baseDir + "/" + shape + "/" + sensor + "/" + model + "/" + eta + "/" + init + "/b." + str(
                                         i) + ".gz")
                                 best.append(
-                                    np.loadtxt(baseDir + "/" + shape + "/" + sensor + "/" + model + "/" + eta + "/" + init + "/b." + str(
-                                        i) + ".gz"))
+                                    np.loadtxt(
+                                        baseDir + "/" + shape + "/" + sensor + "/" + model + "/" + eta + "/" + init + "/b." + str(
+                                            i) + ".gz"))
                                 print(
                                     "post load " + baseDir + "/" + shape + "/" + sensor + "/" + model + "/" + eta + "/" + init + "/b." + str(
                                         i) + ".gz")
@@ -428,70 +464,71 @@ if __name__ == '__main__':
                         else:
                             for i in range(10):
                                 best.append(String(getBest(
-                                    baseDir + "/" + shape + "/" + sensor + "/" + model + "/" + eta + "/" + init + "/" + str(
-                                        i) + ".txt")))
-                            bests[shape + "_" + sensor + "_" + model + "_" + eta + "_" + init] = processNetData(pyworker.locomoteSerializedParallel(best))
+                                        baseDir + "/" + shape + "/" + sensor + "/" + model + "/" + eta + "/" + init + "/" + str(
+                                            i) + ".txt")))
+                            bests[shape + "_" + sensor + "_" + model + "_" + eta + "_" + init] = processNetData(
+                                pyworker.locomoteSerializedParallel(best))
                             print(bests[shape + "_" + sensor + "_" + model + "_" + eta + "_" + init][i].shape)
                             for i in range(10):
                                 np.savetxt(
                                     baseDir + "/" + shape + "/" + sensor + "/" + model + "/" + eta + "/" + init + "/b." + str(
-                                        i) + ".gz", bests[shape + "_" + sensor + "_" + model + "_" + eta + "_" + init][i])
+                                        i) + ".gz",
+                                    bests[shape + "_" + sensor + "_" + model + "_" + eta + "_" + init][i])
 
                         # plotData(shape+"_"+sensor+"_"+model+"_"+eta+"_"+init)
 
-
-    for model in ['zero', 'random']:
+    for model in inits:
         fig, axs = plt.subplots(2, 3, sharey=True)
         for y in range(len(shapes)):
             for x in range(len(sensors)):
                 if x == 1 and y == 1:
                     plotDataModel(axs, allData, shapes[y] + "_" + sensors[x], x, y, model, True)
-                    #plotDataInit(axs, allData, shapes[y] + "_" + sensors[x] + "_incoming", x, y, True)
+                    # plotDataInit(axs, allData, shapes[y] + "_" + sensors[x] + "_incoming", x, y, True)
                 else:
                     plotDataModel(axs, allData, shapes[y] + "_" + sensors[x], x, y, model, False)
-                    #plotDataInit(axs, allData, shapes[y] + "_" + sensors[x] + "_incoming", x, y, False)
-        fig.suptitle("Initilization "+model)
+                    # plotDataInit(axs, allData, shapes[y] + "_" + sensors[x] + "_incoming", x, y, False)
+        fig.suptitle("Initilization " + model)
         axs[0, 0].set_ylabel('Worm \n $\overline{v}$', multialignment='center')
         axs[1, 0].set_ylabel('Biped\n $\overline{v}$', multialignment='center')
         axs[1, 0].set_xlabel('Low')
         axs[1, 1].set_xlabel('Medium')
         axs[1, 2].set_xlabel('High')
         fig.legend(loc='upper right', ncol=2, fontsize="x-small")
-        plt.savefig("model_comparison_"+model+".png", dpi=800)
+        plt.savefig("plots/"+"model_comparison_" + model + ".png", dpi=800)
         plt.clf()
 
-    for model in ['incoming', 'full']:
+    for model in models:
         fig, axs = plt.subplots(2, 3, sharey=True)
         for y in range(len(shapes)):
             for x in range(len(sensors)):
                 if x == 1 and y == 1:
-                    #plotDataModel(axs, allData, shapes[y] + "_" + sensors[x], x, y, model, True)
-                    plotDataInit(axs, allData, shapes[y] + "_" + sensors[x] + "_incoming", x, y, True)
+                    # plotDataModel(axs, allData, shapes[y] + "_" + sensors[x], x, y, model, True)
+                    plotDataInit(axs, allData, shapes[y] + "_" + sensors[x] + "_incoming", x, y, True, shapes[y] + "_" + sensors[x])
                 else:
-                    #plotDataModel(axs, allData, shapes[y] + "_" + sensors[x], x, y, model, False)
-                    plotDataInit(axs, allData, shapes[y] + "_" + sensors[x] + "_incoming", x, y, False)
-        fig.suptitle("model "+model)
+                    # plotDataModel(axs, allData, shapes[y] + "_" + sensors[x], x, y, model, False)
+                    plotDataInit(axs, allData, shapes[y] + "_" + sensors[x] + "_incoming", x, y, False, shapes[y] + "_" + sensors[x])
+        fig.suptitle("model " + model)
         axs[0, 0].set_ylabel('Worm\n $\overline{v}$', multialignment='center')
         axs[1, 0].set_ylabel('Biped\n $\overline{v}$', multialignment='center')
         axs[1, 0].set_xlabel('Low')
         axs[1, 1].set_xlabel('Medium')
         axs[1, 2].set_xlabel('High')
         fig.legend(loc='upper right', ncol=2, fontsize="x-small")
-        plt.savefig("init_comparison_"+model+".png", dpi=800)
+        plt.savefig("plots/"+"init_comparison_" + model + ".png", dpi=800)
         plt.clf()
 
     for shape in shapes:
         fig, axs = plt.subplots(3, 1, sharey=True)
-        axs[0].set_title(shape)
+        fig.suptitle(shape)
         for y in range(len(sensors)):
             boxPlot(axs, allVal, shape + "_" + sensors[y], y, sensors[y][0].upper() + sensors[y][1:])
-        plt.savefig(shape+"_adaptation.png", dpi=800)
+        plt.savefig("plots/"+shape + "_adaptation.png", dpi=800)
+        plt.clf()
 
-
-    #mi = findMin(bests)
-    #ma = findMax(bests)
-    #print(mi)
-    #print(ma)
+    # mi = findMin(bests)
+    # ma = findMax(bests)
+    # print(mi)
+    # print(ma)
 
     for shape in shapes:
         for sensor in sensors:
@@ -503,4 +540,45 @@ if __name__ == '__main__':
                         conf = shape + "_" + sensor + "_" + model + "_" + eta + "_" + init
                         netPlot(sum(bests[conf]) / len(bests[conf]), conf)
 
+    allValB = dict()
+    allValBData = dict()
+    breakables = ["broken-0.1-0", "broken-0.2-0", "broken-0.5-0"]
 
+    for shape in shapes:
+        for sensor in sensors:
+            tmp = list()
+            for i in range(10):
+                tmp = getBest(baseDir + "/" + shape + "/" + sensor + "/mlp/" + str(i) + ".txt")
+            allValB[shape + "_" + sensor] = dict()
+            allValBData[shape + "_" + sensor] = dict()
+            for breakable in breakables:
+                allValB[shape + "_" + sensor][breakable] = validateBreakable(best, breakable)
+                allValBData[shape + "_" + sensor][breakable] = processNetData(pyworker.locomoteSerializedParallelBreakable(best, breakable))
+            for model in models:
+                tmp = list()
+                for i in range(10):
+                    tmp = getBest(baseDir + "/" + shape + "/" + sensor + "/" + model + "/" + "0.01" + "/" + "zero" + "/"+ str(i) + ".txt")
+                allValB[shape + "_" + sensor+"_"+model] = dict()
+                for breakable in breakables:
+                    allValB[shape + "_" + sensor+"_"+model][breakable] = validateBreakable(best, breakable)
+                    allValBData[shape + "_" + sensor+"_"+model][breakable] = processNetData(pyworker.locomoteSerializedParallelBreakable(best, breakable))
+
+    for shape in shapes:
+        for sensor in sensors:
+            for breakable in breakables:
+                conf = shape + "_" + sensor
+                netPlot(sum(allValBData[conf]) / len(allValBData[conf]), conf+"_"+breakable.split("-")[1])
+            for model in models:
+                for breakable in breakables:
+                    conf = shape + "_" + sensor + "_" + model
+                    netPlot(sum(allValBData[conf]) / len(allValBData[conf]), conf+"_"+breakable.split("-")[1])
+
+    for shape in shapes:
+        fig, axs = plt.subplots(3, 1, sharey=True)
+        fig.suptitle(shape)
+        axs[0].set_title(shape)
+        for y in range(len(sensors)):
+            boxPlotB(axs,y, shape, sensors[y], allValB, sensors[y][0].upper() + sensors[y][1:])
+
+        plt.savefig("plots/"+shape + "_breakable.png", dpi=800)
+        plt.clf()
